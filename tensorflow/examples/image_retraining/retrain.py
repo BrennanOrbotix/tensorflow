@@ -762,6 +762,9 @@ def add_final_training_ops(class_count, final_tensor_name, bottleneck_tensor,
     The tensors for the training and cross entropy results, and tensors for the
     bottleneck input and ground truth input.
   """
+
+  print("Adding fully connected layer, class count: " + str(class_count))
+
   with tf.name_scope('input'):
     bottleneck_input = tf.placeholder_with_default(
         bottleneck_tensor,
