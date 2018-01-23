@@ -75,14 +75,13 @@ def load_labels(label_file):
 def print_to_csv():
     field_names = []
     data = []
-    csv_file_name = category_name + '-label_results.csv'
-    if os.path.exists(csv_file_name):
-        with open(csv_file_name) as csvfile:
+    if os.path.exists(csv_name):
+        with open(csv_name) as csvfile:
             contents = csv.DictReader(csvfile)
             field_names = contents.fieldnames
             data = [line for line in contents]
 
-    with open(csv_file_name, 'wb') as csvfile:
+    with open(csv_name, 'wb') as csvfile:
         if not field_names:
             field_names = ['Image Name']
 
@@ -106,10 +105,41 @@ def print_to_csv():
         results_writer.writerow(row)
 
 
+def label_image(image, model_file='/tmp/output_graph.pb',
+                label_file='/tmp/output_labels.txt',
+                input_layer='Mul',
+                output_layer='final_result',
+                input_mean=128,
+                input_std=128,
+                input_height=299,
+                input_width=299):
+    graph = load_graph(model_file)
+    t = read_tensor_from_image_file(image,
+                                    input_height=input_height,
+                                    input_width=input_width,
+                                    input_mean=input_mean,
+                                    input_std=input_std)
+
+    input_name = "import/" + input_layer
+    output_name = "import/" + output_layer
+    input_operation = graph.get_operation_by_name(input_name)
+    output_operation = graph.get_operation_by_name(output_name)
+
+    with tf.Session(graph=graph) as sess:
+        results = sess.run(output_operation.outputs[0],
+            {input_operation.outputs[0]: t})
+    results = np.squeeze(results)
+
+    # top_k = results.argsort()[-5:][::-1]
+    labels = load_labels(label_file)
+    return results, labels
+
+
+
+
 if __name__ == "__main__":
     file_name = "tensorflow/examples/label_image/data/grace_hopper.jpg"
-    model_file = \
-        "tensorflow/examples/label_image/data/inception_v3_2016_08_28_frozen.pb"
+    model_file = "tensorflow/examples/label_image/data/inception_v3_2016_08_28_frozen.pb"
     label_file = "tensorflow/examples/label_image/data/imagenet_slim_labels.txt"
     input_height = 299
     input_width = 299
@@ -128,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--input_std", type=int, help="input std")
     parser.add_argument("--input_layer", help="name of input layer")
     parser.add_argument("--output_layer", help="name of output layer")
-    parser.add_argument("--category", type=str, help="used as csv prefix")
+    parser.add_argument("--csv_name", type=str)
     args = parser.parse_args()
 
     if args.graph:
@@ -149,28 +179,37 @@ if __name__ == "__main__":
         input_layer = args.input_layer
     if args.output_layer:
         output_layer = args.output_layer
-    if args.category:
-        category_name = args.category
+    if args.csv_name:
+        csv_name = args.csv_name
 
-    graph = load_graph(model_file)
-    t = read_tensor_from_image_file(file_name,
-                                    input_height=input_height,
-                                    input_width=input_width,
-                                    input_mean=input_mean,
-                                    input_std=input_std)
+    # graph = load_graph(model_file)
+    # t = read_tensor_from_image_file(file_name,
+    #                                 input_height=input_height,
+    #                                 input_width=input_width,
+    #                                 input_mean=input_mean,
+    #                                 input_std=input_std)
+    #
+    # input_name = "import/" + input_layer
+    # output_name = "import/" + output_layer
+    # input_operation = graph.get_operation_by_name(input_name)
+    # output_operation = graph.get_operation_by_name(output_name)
+    #
+    # with tf.Session(graph=graph) as sess:
+    #     results = sess.run(output_operation.outputs[0],
+    #                        {input_operation.outputs[0]: t})
+    # results = np.squeeze(results)
 
-    input_name = "import/" + input_layer
-    output_name = "import/" + output_layer
-    input_operation = graph.get_operation_by_name(input_name)
-    output_operation = graph.get_operation_by_name(output_name)
-
-    with tf.Session(graph=graph) as sess:
-        results = sess.run(output_operation.outputs[0],
-                           {input_operation.outputs[0]: t})
-    results = np.squeeze(results)
+    results, labels = label_image(image=file_name,
+                                  model_file=model_file,
+                                  label_file=label_file,
+                                  input_layer=input_layer,
+                                  output_layer=output_layer,
+                                  input_mean=input_mean,
+                                  input_std=input_std,
+                                  input_height=input_height,
+                                  input_width=input_width)
 
     top_k = results.argsort()[-5:][::-1]
-    labels = load_labels(label_file)
     for i in top_k:
         print(labels[i], results[i])
     print_to_csv()
